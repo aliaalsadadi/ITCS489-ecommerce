@@ -6,5 +6,21 @@ export default defineConfig({
   server: {
     host: "127.0.0.1",
     port: 5173,
+    allowedHosts: [".ngrok-free.app", ".ngrok.io"],
+    proxy: {
+      "/api": {
+        target: "http://127.0.0.1:8000",
+        changeOrigin: true,
+        ws: true,
+      },
+      "/health": {
+        target: "http://127.0.0.1:8000",
+        changeOrigin: true,
+      },
+      "/uploads": {
+        target: "http://127.0.0.1:8000",
+        changeOrigin: true,
+      },
+    },
   },
 });

@@ -8,6 +8,7 @@ export interface Profile {
   shop_name: string | null;
   bio: string | null;
   profile_image_url: string | null;
+  wallet_balance: string;
   is_suspended: boolean;
   created_at: string;
   updated_at: string;
@@ -16,6 +17,10 @@ export interface Profile {
 export interface Product {
   id: string;
   artist_id: string;
+  artist_name: string | null;
+  artist_shop_name: string | null;
+  artist_profile_image_url: string | null;
+  units_sold: number;
   name: string;
   description: string;
   category: string;
@@ -25,6 +30,22 @@ export interface Product {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+}
+
+export interface ArtisanSummary {
+  id: string;
+  full_name: string | null;
+  shop_name: string | null;
+  bio: string | null;
+  profile_image_url: string | null;
+  active_product_count: number;
+  units_sold: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ArtisanDetail extends ArtisanSummary {
+  products: Product[];
 }
 
 export interface CartItem {
@@ -61,6 +82,10 @@ export interface Order {
   currency: string;
   shipping_address: string;
   payment_transaction_id: string | null;
+  tracking_number: string | null;
+  shipping_carrier: string | null;
+  shipping_method: string | null;
+  estimated_delivery_at: string | null;
   created_at: string;
   updated_at: string;
   items: OrderItem[];
@@ -94,6 +119,7 @@ export interface AdminDashboardSummary {
   products_total: number;
   orders_total: number;
   auctions_total: number;
+  unpaid_auctions_count: number;
   revenue_total: string;
 }
 
@@ -115,4 +141,23 @@ export interface AdminAuditLog {
   target_id: string;
   details: Record<string, unknown>;
   created_at: string;
+}
+
+export interface UnpaidAuctionOrder {
+  order_id: string;
+  customer_id: string;
+  customer_name: string | null;
+  customer_email: string;
+  auction_id: string;
+  product_id: string;
+  product_name: string;
+  winning_bid_amount: string;
+  created_at: string;
+  hours_pending: number;
+  status: string;
+}
+
+export interface UnpaidAuctionOrdersResponse {
+  items: UnpaidAuctionOrder[];
+  total: number;
 }

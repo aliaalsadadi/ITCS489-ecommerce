@@ -1,4 +1,4 @@
-# Artisan Marketplace Frontend
+# Souq Al Artisan Frontend
 
 React + TypeScript client integrated with the existing FastAPI backend.
 
