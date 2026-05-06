@@ -1,4 +1,4 @@
-# Artisan Marketplace Backend
+# Souq Al Artisan Backend
 
 Async FastAPI backend using Supabase Postgres, Supabase Auth, and Supabase Storage.
 
@@ -55,6 +55,34 @@ Use card tokens to force outcomes:
 - Swagger UI: `/docs`
 - ReDoc: `/redoc`
 
+## Testing
+
+This backend now includes all three testing layers:
+
+- Unit tests: small isolated checks for business logic and auth guards
+- Integration tests: API-level tests that exercise route wiring, dependency overrides, and response serialization
+- Performance tests: lightweight latency checks for a public endpoint
+
+Install test dependencies:
+
+```powershell
+uv sync --group dev
+```
+
+Run the full backend test suite:
+
+```powershell
+uv run pytest
+```
+
+Run specific layers:
+
+```powershell
+uv run pytest -m unit
+uv run pytest -m integration
+uv run pytest -m performance
+```
+
 ## Seed demo users and data
 
 Run once from `backend`:
@@ -71,6 +99,25 @@ This creates (or reuses) three Supabase Auth users and matching profile rows:
 - password for all: `DemoPass123!`
 
 It also inserts 3 sample products for the artisan if none exist.
+
+## Mass seed catalog and popularity data
+
+Run from `backend` when you want a larger demo dataset:
+
+```powershell
+python -m app.scripts.seed_mass
+```
+
+This creates or reuses demo auth users under `@souq-demo.local`, then resets only seed-owned carts,
+orders, and products before recreating:
+
+- 20 artisans
+- 40 customers
+- 120 products with curated external image URLs
+- 220 paid/processing/shipped/delivered orders to drive popularity rankings
+- matching admin activity logs for product creation, payment success, and order creation
+
+All mass-seeded users use password `DemoPass123!`.
 
 ## Quick manual test flow
 

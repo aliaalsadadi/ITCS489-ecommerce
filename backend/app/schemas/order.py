@@ -14,6 +14,10 @@ class CheckoutRequest(BaseModel):
 
 class OrderStatusUpdateRequest(BaseModel):
     status: OrderStatus
+    tracking_number: str | None = Field(default=None, max_length=255)
+    shipping_carrier: str | None = Field(default=None, max_length=120)
+    shipping_method: str | None = Field(default=None, max_length=120)
+    estimated_delivery_at: datetime | None = None
 
 
 class OrderItemResponse(BaseModel):
@@ -33,6 +37,10 @@ class OrderResponse(BaseModel):
     currency: str
     shipping_address: str
     payment_transaction_id: str | None
+    tracking_number: str | None
+    shipping_carrier: str | None
+    shipping_method: str | None
+    estimated_delivery_at: datetime | None
     created_at: datetime
     updated_at: datetime
     items: list[OrderItemResponse]

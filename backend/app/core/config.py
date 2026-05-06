@@ -7,12 +7,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=(".env", "../.env"),
+        env_file=(".env"),
         env_file_encoding="utf-8",
         extra="ignore",
     )
 
-    app_name: str = "Artisan Marketplace API"
+    app_name: str = "Souq Al Artisan API"
     api_v1_prefix: str = "/api/v1"
     debug: bool = True
 
@@ -22,10 +22,14 @@ class Settings(BaseSettings):
     supabase_anon_key: str
     supabase_service_role_key: str | None = None
 
-    cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
+    cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000", "http://localhost:5173" , "http://127.0.0.1:5173"])
+
+    # Allows wildcard origins for dev tunnels (e.g. ngrok) without having to keep updating cors_origins.
+    # If set, CORSMiddleware will allow any Origin matching this regex.
+    cors_origin_regex: str | None = r"^https?://.*\\.(ngrok-free\\.app|ngrok\\.io)$"
 
     auto_create_tables: bool = True
-    default_currency: str = "USD"
+    default_currency: str = "BHD"
 
     @field_validator("database_url", mode="before")
     @classmethod

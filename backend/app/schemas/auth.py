@@ -1,4 +1,5 @@
 from datetime import datetime
+from decimal import Decimal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -25,6 +26,7 @@ class ProfileResponse(BaseModel):
     shop_name: str | None
     bio: str | None
     profile_image_url: str | None
+    wallet_balance: Decimal
     is_suspended: bool
     created_at: datetime
     updated_at: datetime

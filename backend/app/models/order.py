@@ -22,6 +22,10 @@ class Order(Base):
     currency: Mapped[str] = mapped_column(String(3), default="USD")
     shipping_address: Mapped[str] = mapped_column(Text)
     payment_transaction_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    tracking_number: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    shipping_carrier: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    shipping_method: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    estimated_delivery_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[DateTime] = mapped_column(

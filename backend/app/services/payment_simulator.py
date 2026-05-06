@@ -9,18 +9,18 @@ def _deterministic_bucket(seed_text: str) -> int:
 
 
 def simulate_payment(card_token: str, amount: Decimal, order_seed: UUID) -> dict:
+    """
+    Payment simulator that accepts only the demo card number 1111222233334444.
+    All other cards are deterministically rejected.
+    """
     token = card_token.strip().lower()
 
-    if token.startswith("success_"):
+    # Only accept the demo card number
+    if token == "1111222233334444":
         return {"status": "success", "transaction_id": str(uuid4())}
-    if token.startswith("decline_"):
-        return {"status": "declined", "reason": "Card declined"}
-    if token.startswith("timeout_"):
-        return {"status": "timeout", "reason": "Gateway timeout"}
 
-    bucket = _deterministic_bucket(f"{token}:{amount}:{order_seed}")
-    if bucket < 90:
-        return {"status": "success", "transaction_id": str(uuid4())}
-    if bucket < 98:
-        return {"status": "declined", "reason": "Insufficient funds"}
-    return {"status": "timeout", "reason": "Gateway timeout"}
+    # All other cards are declined
+    return {
+        "status": "declined",
+        "reason": "This card is not accepted. Use 1111222233334444 for demo purposes.",
+    }

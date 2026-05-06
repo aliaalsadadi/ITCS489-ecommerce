@@ -50,10 +50,37 @@ class AdminActionLogResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class UnpaidAuctionSummary(BaseModel):
+    count: int
+    oldest_created_at: datetime | None
+    total_amount: str
+    currency: str
+
+
+class UnpaidAuctionOrder(BaseModel):
+    order_id: UUID
+    customer_id: UUID
+    customer_name: str | None
+    customer_email: str
+    auction_id: UUID
+    product_id: UUID
+    product_name: str
+    winning_bid_amount: str
+    created_at: datetime
+    hours_pending: float
+    status: str
+
+
+class UnpaidAuctionOrdersResponse(BaseModel):
+    items: list[UnpaidAuctionOrder]
+    total: int
+
+
 class AdminDashboardSummary(BaseModel):
     users_total: int
     users_suspended: int
     products_total: int
     orders_total: int
     auctions_total: int
+    unpaid_auctions_count: int
     revenue_total: str

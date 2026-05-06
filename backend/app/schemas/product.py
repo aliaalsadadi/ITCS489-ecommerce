@@ -27,6 +27,10 @@ class ProductUpdateRequest(BaseModel):
 class ProductResponse(BaseModel):
     id: UUID
     artist_id: UUID
+    artist_name: str | None = None
+    artist_shop_name: str | None = None
+    artist_profile_image_url: str | None = None
+    units_sold: int = 0
     name: str
     description: str
     category: str

@@ -11,7 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.config import get_settings
-from app.core.constants import AuctionStatus, BidStatus, OrderStatus
+from app.core.constants import AdminTargetType, AuctionAction, AuctionStatus, BidStatus, OrderStatus
+from app.models.admin_action_log import AdminActionLog
 from app.models.auction import Auction
 from app.models.bid import Bid
 from app.models.order import Order, OrderItem
@@ -128,6 +129,7 @@ async def close_auction(db: AsyncSession, auction_id: UUID, closed_by: Profile |
     winner_bid = (await db.scalars(winner_bid_stmt)).first()
 
     auction.status = AuctionStatus.CLOSED.value
+    order_id: UUID | None = None
     if winner_bid is not None:
         auction.highest_bidder_id = winner_bid.bidder_id
         auction.current_highest_bid = winner_bid.bid_amount
@@ -145,6 +147,7 @@ async def close_auction(db: AsyncSession, auction_id: UUID, closed_by: Profile |
         )
         db.add(order)
         await db.flush()
+        order_id = order.id
 
         product_name = f"Auction Item {auction.product_id}"
         artist_id: UUID | None = auction.seller_id
@@ -167,6 +170,28 @@ async def close_auction(db: AsyncSession, auction_id: UUID, closed_by: Profile |
 
     await db.commit()
     await db.refresh(auction)
+
+    # Log auction closure
+    admin_id = closed_by.id if closed_by is not None else None
+    db.add(
+        AdminActionLog(
+            admin_id=admin_id,
+            action=AuctionAction.CLOSED.value,
+            target_type=AdminTargetType.AUCTION.value,
+            target_id=str(auction.id),
+            details={
+                "auction_id": str(auction.id),
+                "product_id": str(auction.product_id),
+                "seller_id": str(auction.seller_id),
+                "winner_id": str(auction.highest_bidder_id) if auction.highest_bidder_id else None,
+                "winning_bid_amount": str(auction.current_highest_bid) if auction.highest_bidder_id else None,
+                "order_id": str(order_id) if order_id else None,
+                "closed_by": "system" if closed_by is None else str(closed_by.id),
+            },
+        )
+    )
+    await db.commit()
+
     return auction
 
 

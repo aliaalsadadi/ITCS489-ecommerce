@@ -35,3 +35,30 @@ class AdminTargetType(StrEnum):
     PRODUCT = "product"
     ORDER = "order"
     AUCTION = "auction"
+
+
+class ProductAction(StrEnum):
+    CREATED = "product_created"
+    UPDATED = "product_updated"
+    DELETED = "product_deleted"
+
+
+class AuctionAction(StrEnum):
+    CREATED = "auction_created"
+    CLOSED = "auction_closed"
+    CANCELED = "auction_canceled"
+
+
+class BidAction(StrEnum):
+    PLACED = "bid_placed"
+    OUTBID = "bid_outbid"
+
+
+class OrderAction(StrEnum):
+    CREATED = "order_created"
+
+
+class PaymentAction(StrEnum):
+    ATTEMPTED = "payment_attempted"
+    SUCCEEDED = "payment_succeeded"
+    FAILED = "payment_failed"

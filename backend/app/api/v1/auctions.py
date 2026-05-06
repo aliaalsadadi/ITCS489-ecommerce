@@ -9,7 +9,8 @@ from sqlalchemy import Select, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_profile, require_roles
-from app.core.constants import AuctionStatus, UserRole
+from app.api.v1.admin import _log_action
+from app.core.constants import AdminTargetType, AuctionAction, AuctionStatus, BidAction, UserRole
 from app.db.session import AsyncSessionLocal, get_db
 from app.models.auction import Auction
 from app.models.product import Product
@@ -94,6 +95,26 @@ async def create_auction(
     db.add(auction)
     await db.commit()
     await db.refresh(auction)
+
+    # Log auction creation
+    await _log_action(
+        db,
+        current_profile.id,
+        AuctionAction.CREATED.value,
+        AdminTargetType.AUCTION,
+        str(auction.id),
+        {
+            "product_id": str(product.id),
+            "product_name": product.name,
+            "seller_id": str(product.artist_id),
+            "starting_price": str(payload.starting_price),
+            "min_increment": str(payload.min_increment),
+            "duration_hours": (payload.end_time - start_time).total_seconds() / 3600,
+            "status": auction.status,
+        },
+    )
+    await db.commit()
+
     return auction
 
 
@@ -169,6 +190,39 @@ async def place_auction_bid(
     current_profile: Profile = Depends(get_current_profile),
 ) -> dict:
     result = await place_bid(db, auction_id, current_profile, Decimal(payload.bid_amount))
+
+    # Log bid placement
+    await _log_action(
+        db,
+        current_profile.id,
+        BidAction.PLACED.value,
+        AdminTargetType.AUCTION,
+        str(auction_id),
+        {
+            "bidder_id": str(current_profile.id),
+            "bid_amount": str(result.bid.bid_amount),
+            "auction_id": str(auction_id),
+            "bid_id": str(result.bid.id),
+        },
+    )
+
+    # Log outbid event if applicable
+    if result.outbid_bidder_id is not None:
+        await _log_action(
+            db,
+            current_profile.id,
+            BidAction.OUTBID.value,
+            AdminTargetType.AUCTION,
+            str(auction_id),
+            {
+                "outbid_bidder_id": str(result.outbid_bidder_id),
+                "new_highest_bidder": str(result.auction.highest_bidder_id),
+                "new_bid_amount": str(result.auction.current_highest_bid),
+                "auction_id": str(auction_id),
+            },
+        )
+
+    await db.commit()
 
     await auction_ws_manager.broadcast(
         result.auction.id,
