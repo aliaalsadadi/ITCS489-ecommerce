@@ -64,6 +64,7 @@ async def test_artisans_endpoint_average_latency_under_50ms() -> None:
 
     average_ms = sum(samples) / len(samples) * 1000
     p95_ms = sorted(samples)[int(len(samples) * 0.95) - 1] * 1000
-
+    print(f"Average latency: {average_ms:.2f}ms")
+    print(f"P95 latency: {p95_ms:.2f}ms")
     assert average_ms < 50, f"Average latency was {average_ms:.2f}ms"
     assert p95_ms < 75, f"P95 latency was {p95_ms:.2f}ms"

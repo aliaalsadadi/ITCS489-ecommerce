@@ -83,6 +83,53 @@ uv run pytest -m integration
 uv run pytest -m performance
 ```
 
+### Locust stress tests
+
+For real load testing against a running backend, this project also includes two Locust scenarios in
+`tests/performance/locustfile.py`:
+
+- `BrowseAndSearchUser`: heavy public browsing and product searching
+- `SimultaneousBidUser`: many authenticated users bidding on the same auction
+
+Install the dev tools first:
+
+```powershell
+uv sync --group dev
+```
+
+Start the backend in a separate terminal:
+
+```powershell
+uv run uvicorn app.main:app --reload
+```
+
+Test 1: 100 users browsing and searching products
+
+```powershell
+uv run locust -f tests/performance/locustfile.py BrowseAndSearchUser --host http://127.0.0.1:8000 --users 100 --spawn-rate 20 --run-time 2m --headless
+```
+
+Test 2: 50 users bidding on the same auction
+
+Set the target auction id and a comma-separated list of bidder access tokens first:
+
+```powershell
+$env:LOCUST_AUCTION_ID="<auction-id>"
+$env:LOCUST_BIDDER_TOKENS="<token-1>,<token-2>,<token-3>"
+```
+
+Then run:
+
+```powershell
+uv run locust -f tests/performance/locustfile.py SimultaneousBidUser --host http://127.0.0.1:8000 --users 50 --spawn-rate 10 --run-time 2m --headless
+```
+
+Notes:
+
+- The pytest performance test is an in-memory latency check.
+- The Locust scenarios are real HTTP load tests against your running API.
+- For the bid load test, include enough customer tokens to spread requests across distinct users.
+
 ## Seed demo users and data
 
 Run once from `backend`:
