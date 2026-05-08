@@ -18,6 +18,14 @@ class RoleUpdateRequest(BaseModel):
     role: UserRole
 
 
+class EmailAvailabilityRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=255)
+
+
+class EmailAvailabilityResponse(BaseModel):
+    available: bool
+
+
 class ProfileResponse(BaseModel):
     id: UUID
     email: str

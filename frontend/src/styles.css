@@ -579,6 +579,18 @@ select {
   background: #fff;
 }
 
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: var(--text);
+}
+
+.checkbox-row input {
+  width: auto;
+  accent-color: var(--brand-ink);
+}
+
 textarea {
   resize: vertical;
 }
@@ -727,16 +739,6 @@ textarea {
 
 .image-remove-btn:hover {
   transform: translateY(-1px);
-}
-
-.checkbox-row {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-}
-
-.checkbox-row input {
-  width: auto;
 }
 
 .history-list {

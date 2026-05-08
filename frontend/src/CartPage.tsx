@@ -140,13 +140,14 @@ export function CartPage({ token, cart, onCartUpdate }: { token: string; cart: C
           </p>
         )}
 
-        <form className="form-stack top-gap" onSubmit={checkout}>
+        <form className="form-stack top-gap" onSubmit={checkout} autoComplete="off" data-1p-ignore="true" data-bwignore="true" data-lpignore="true">
           <label>
             Shipping Address
             <input
               value={checkoutAddress}
               onChange={(event) => setCheckoutAddress(event.target.value)}
               minLength={5}
+              autoComplete="off"
               required
             />
           </label>
@@ -157,6 +158,10 @@ export function CartPage({ token, cart, onCartUpdate }: { token: string; cart: C
               placeholder="Full name as on card"
               value={cardHolder}
               onChange={(e) => setCardHolder(e.target.value)}
+              autoComplete="off"
+              data-1p-ignore="true"
+              data-bwignore="true"
+              data-lpignore="true"
               required
             />
           </label>
@@ -167,6 +172,10 @@ export function CartPage({ token, cart, onCartUpdate }: { token: string; cart: C
               inputMode="numeric"
               placeholder="1111 2222 3333 4444"
               value={checkoutCardToken.replace(/(.{4})/g, "$1 ").trim()}
+              autoComplete="off"
+              data-1p-ignore="true"
+              data-bwignore="true"
+              data-lpignore="true"
               onChange={(event) => {
                 // keep only digits, limit to 16
                 const digits = (event.target.value || "").replace(/\D/g, "").slice(0, 16);
@@ -190,6 +199,10 @@ export function CartPage({ token, cart, onCartUpdate }: { token: string; cart: C
                   else setExpiry(raw.slice(0, 2) + "/" + raw.slice(2, 4));
                 }}
                 inputMode="numeric"
+                autoComplete="off"
+                data-1p-ignore="true"
+                data-bwignore="true"
+                data-lpignore="true"
                 required
               />
             </label>
@@ -200,6 +213,10 @@ export function CartPage({ token, cart, onCartUpdate }: { token: string; cart: C
                 placeholder="123"
                 inputMode="numeric"
                 value={cvv}
+                autoComplete="off"
+                data-1p-ignore="true"
+                data-bwignore="true"
+                data-lpignore="true"
                 onChange={(e) => setCvv((e.target.value || "").replace(/\D/g, "").slice(0, 4))}
                 required
               />

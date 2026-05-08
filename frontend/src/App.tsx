@@ -11,7 +11,7 @@ import {
 } from "react-router-dom";
 
 import { apiRequest, signInWithPassword, signUpWithPassword, wsUrl } from "./api";
-import type { ArtisanDetail, ArtisanSummary, Auction, AuctionListResponse, Cart, Order, Product, Profile } from "./types";
+import type { ArtisanDetail, ArtisanSummary, Auction, AuctionListResponse, Cart, Order, Product, Profile, UserRole } from "./types";
 import { AdminDashboardPage } from "./AdminDashboardPage";
 import { CartPage } from "./CartPage";
 import { BrowseSkeleton } from "./BrowseSkeleton";
@@ -24,6 +24,7 @@ const TOKEN_KEY = "artisan_access_token";
 type AuctionView = "active" | "upcoming" | "ended" | "all";
 type OrdersTab = "orders" | "sales";
 type ProductSort = "newest" | "popular" | "price_asc" | "price_desc";
+type SignupRole = Extract<UserRole, "customer" | "artisan">;
 
 type AuctionDetail = {
   auction_id: string;
@@ -506,6 +507,7 @@ function LoginPage({
           <label>
             Email
             <input value={email} onChange={(event) => setEmail(event.target.value)} required />
+            <span className="muted-inline">Use a real public email domain, not a .local demo address.</span>
           </label>
           <label>
             Password
@@ -529,12 +531,13 @@ function RegisterPage({
   onRegister,
   noticeText,
 }: {
-  onRegister: (email: string, password: string, displayName: string) => Promise<void>;
+  onRegister: (email: string, password: string, displayName: string, role: SignupRole) => Promise<void>;
   noticeText: string;
 }) {
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
+  const [wantsArtisanAccount, setWantsArtisanAccount] = useState(false);
   const [errorText, setErrorText] = useState("");
   const navigate = useNavigate();
 
@@ -542,7 +545,7 @@ function RegisterPage({
     event.preventDefault();
     setErrorText("");
     try {
-      await onRegister(email, password, displayName);
+      await onRegister(email, password, displayName, wantsArtisanAccount ? "artisan" : "customer");
       navigate("/");
     } catch (error) {
       setErrorText(parseError(error));
@@ -567,6 +570,14 @@ function RegisterPage({
           <label>
             Password
             <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} minLength={8} required />
+          </label>
+          <label className="checkbox-row">
+            <input
+              type="checkbox"
+              checked={wantsArtisanAccount}
+              onChange={(event) => setWantsArtisanAccount(event.target.checked)}
+            />
+            <span>Sign up as an artisan</span>
           </label>
           <button type="submit" className="solid-btn full-width">
             Create Account
@@ -2078,9 +2089,23 @@ export default function App() {
     }
   }
 
-  async function register(email: string, password: string, displayName: string): Promise<void> {
+  async function register(email: string, password: string, displayName: string, role: SignupRole): Promise<void> {
     await signUpWithPassword(email, password, displayName);
-    await login(email, password);
+    const accessToken = await signInWithPassword(email, password);
+    await apiRequest<Profile>("/auth/me", {}, accessToken);
+    if (role === "artisan") {
+      await apiRequest<Profile>(
+        "/auth/me/role",
+        {
+          method: "POST",
+          body: JSON.stringify({ role }),
+        },
+        accessToken
+      );
+    }
+    localStorage.setItem(TOKEN_KEY, accessToken);
+    setAuthNotice("");
+    setToken(accessToken);
   }
 
   function logout(): void {
