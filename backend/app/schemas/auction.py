@@ -16,8 +16,12 @@ class AuctionCreateRequest(BaseModel):
 class AuctionStatusResponse(BaseModel):
     id: UUID
     product_id: UUID
+    product_name: str | None = None
+    product_image_url: str | None = None
     seller_id: UUID
+    seller_name: str | None = None
     highest_bidder_id: UUID | None
+    highest_bidder_name: str | None = None
     status: str
     starting_price: Decimal
     min_increment: Decimal

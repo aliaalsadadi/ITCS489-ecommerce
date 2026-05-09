@@ -30,8 +30,12 @@ type AuctionDetail = {
   auction_id: string;
   status: string;
   product_id: string;
+  product_name: string | null;
+  product_image_url: string | null;
   seller_id: string;
+  seller_name: string | null;
   highest_bidder_id: string | null;
+  highest_bidder_name: string | null;
   current_highest_bid: string;
   min_increment: string;
   start_time: string;
@@ -40,6 +44,7 @@ type AuctionDetail = {
   recent_bids: Array<{
     id: string;
     bidder_id: string;
+    bidder_name: string | null;
     bid_amount: string;
     created_at: string;
   }>;
@@ -374,7 +379,6 @@ function HomePage({ token, profile }: { token: string; profile: Profile | null }
       <section className="site-wrap section-block">
         <div className="section-head">
           <h2>Popular Artisans</h2>
-          <Link to="/browse">Shop their work</Link>
         </div>
         <div className="card-grid four-col top-gap">
           {popularArtisans.length === 0 ? (
@@ -408,7 +412,6 @@ function HomePage({ token, profile }: { token: string; profile: Profile | null }
       <section className="site-wrap section-block">
         <div className="section-head">
           <h2>Popular Products</h2>
-          <Link to={token ? "/browse" : "/login"}>View all products</Link>
         </div>
         <div className="card-grid four-col top-gap">
           {popularProducts.length === 0 ? (
@@ -444,9 +447,12 @@ function HomePage({ token, profile }: { token: string; profile: Profile | null }
             {auctions.map((auction) => (
               <Link to={`/auctions/${auction.id}`} key={auction.id} className="auction-card-link">
                 <article className="auction-card">
-                  <div className="card-photo" />
+                  <div
+                    className="card-photo"
+                    style={auction.product_image_url ? { backgroundImage: `url(${auction.product_image_url})` } : undefined}
+                  />
                   <div className="card-body">
-                    <h3>Auction {shortId(auction.id)}</h3>
+                    <h3>{auction.product_name || "Auction Item"}</h3>
                     <p className="muted">{auction.status}</p>
                     <p className="bid-value">{CURRENCY_LABEL} {formatMoney(auction.current_highest_bid)}</p>
                     <p className="muted">Ends in {toCountdown(auction.end_time)}</p>
@@ -609,6 +615,8 @@ function AccountPage({
   const [selectedProfileImage, setSelectedProfileImage] = useState<File | null>(null);
   const [profilePreviewUrl, setProfilePreviewUrl] = useState("");
   const [statusText, setStatusText] = useState("");
+  const [roleStatusText, setRoleStatusText] = useState("");
+  const [isSwitchingRole, setIsSwitchingRole] = useState(false);
 
   useEffect(() => {
     setFullName(profile?.full_name || "");
@@ -655,6 +663,27 @@ function AccountPage({
       setStatusText("Profile updated");
     } catch (error) {
       setStatusText(parseError(error));
+    }
+  }
+
+  async function switchToArtisan(): Promise<void> {
+    setRoleStatusText("");
+    setIsSwitchingRole(true);
+    try {
+      const updated = await apiRequest<Profile>(
+        "/auth/me/role",
+        {
+          method: "POST",
+          body: JSON.stringify({ role: "artisan" }),
+        },
+        token
+      );
+      onProfileUpdate(updated);
+      setRoleStatusText("You are now an artisan.");
+    } catch (error) {
+      setRoleStatusText(parseError(error));
+    } finally {
+      setIsSwitchingRole(false);
     }
   }
 
@@ -706,7 +735,17 @@ function AccountPage({
           <p className="eyebrow">{profile?.role || "customer"}</p>
           <h2>{shopName || fullName || "Your artisan profile"}</h2>
           <p className="muted">{bio || "Add a short story about your work, materials, and studio."}</p>
-          <p className="muted">Role changes are handled by the marketplace team.</p>
+          {profile?.role === "customer" ? (
+            <>
+              <p className="muted">Want to sell your work? Switch your account to an artisan to unlock the Studio tools.</p>
+              <button type="button" className="solid-btn" onClick={() => void switchToArtisan()} disabled={isSwitchingRole}>
+                {isSwitchingRole ? "Switching..." : "Switch to artisan"}
+              </button>
+              {roleStatusText && <p className="status-text">{roleStatusText}</p>}
+            </>
+          ) : (
+            <p className="muted">Role changes are managed by administrators.</p>
+          )}
         </aside>
       </section>
     </main>
@@ -1483,12 +1522,18 @@ function AuctionsPage({ token }: { token: string }) {
             auctions.map((auction) => (
               <Link key={auction.id} to={`/auctions/${auction.id}`} className="auction-card-link">
                 <article className="auction-card">
-                  <div className="card-photo" />
+                  <div
+                    className="card-photo"
+                    style={auction.product_image_url ? { backgroundImage: `url(${auction.product_image_url})` } : undefined}
+                  />
                   <div className="card-body">
-                    <h3>{shortId(auction.product_id)}</h3>
+                    <h3>{auction.product_name || "Auction Item"}</h3>
                     <p className="muted">{auction.status}</p>
                     <p className="bid-value">{CURRENCY_LABEL} {formatMoney(auction.current_highest_bid)}</p>
-                    <p className="muted">{toCountdown(auction.end_time)}</p>
+                    <p className="muted">
+                      {auction.seller_name ? `By ${auction.seller_name} · ` : ""}
+                      {toCountdown(auction.end_time)}
+                    </p>
                   </div>
                 </article>
               </Link>
@@ -1505,12 +1550,12 @@ function AuctionDetailPage({ token }: { token: string }) {
   const [detail, setDetail] = useState<AuctionDetail | null>(null);
   const [product, setProduct] = useState<Product | null>(null);
   const [currentProfile, setCurrentProfile] = useState<Profile | null>(null);
-  const [bidderName, setBidderName] = useState("");
   const [bidAmount, setBidAmount] = useState("");
   const [statusText, setStatusText] = useState("");
   const [bidError, setBidError] = useState("");
   const [showBidConfirmation, setShowBidConfirmation] = useState(false);
   const [liveEvents, setLiveEvents] = useState<string[]>([]);
+  const [liveStatus, setLiveStatus] = useState("Connecting to live updates...");
 
   async function loadAuctionAndProduct(): Promise<void> {
     if (!params.auctionId) {
@@ -1534,7 +1579,7 @@ function AuctionDetailPage({ token }: { token: string }) {
 
     // Fetch current user profile
     try {
-      const profile = await apiRequest<Profile>("/profile", {}, token);
+      const profile = await apiRequest<Profile>("/auth/me", {}, token);
       setCurrentProfile(profile);
     } catch {
       // Profile fetch failed, but that's okay
@@ -1552,7 +1597,11 @@ function AuctionDetailPage({ token }: { token: string }) {
     }
 
     const socket = new WebSocket(wsUrl(`/auctions/ws/live/${params.auctionId}`, token));
+    socket.onopen = () => {
+      setLiveStatus("Live updates connected");
+    };
     socket.onmessage = (event) => {
+      setLiveStatus("Live updates connected");
       setLiveEvents((items) => {
         const line = `${new Date().toLocaleTimeString()} · ${event.data}`;
         return [line, ...items].slice(0, 10);
@@ -1560,7 +1609,10 @@ function AuctionDetailPage({ token }: { token: string }) {
       void loadAuctionAndProduct();
     };
     socket.onerror = () => {
-      setStatusText("Live updates disconnected");
+      setLiveStatus("Live updates may be unstable");
+    };
+    socket.onclose = () => {
+      setLiveStatus("Live updates disconnected");
     };
 
     return () => {
@@ -1622,7 +1674,7 @@ function AuctionDetailPage({ token }: { token: string }) {
         },
         token
       );
-      setStatusText("✅ Bid placed successfully!");
+      setStatusText("Bid placed successfully.");
       setBidAmount("");
       setBidError("");
       await loadAuctionAndProduct();
@@ -1652,12 +1704,16 @@ function AuctionDetailPage({ token }: { token: string }) {
   return (
     <main className="site-wrap section-block">
       <Link to="/auctions" className="back-link">
-        ← Back to Auctions
+        Back to Auctions
       </Link>
       <section className="detail-grid top-gap">
         <div className="detail-photo">
-          {product?.image_url ? (
-            <img src={product.image_url} alt={product.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          {product?.image_url || detail.product_image_url ? (
+            <img
+              src={product?.image_url || detail.product_image_url || ""}
+              alt={product?.name || detail.product_name || "Auction item"}
+              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+            />
           ) : (
             <div style={{ background: "#e0e0e0", width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <span className="muted">No image</span>
@@ -1665,12 +1721,13 @@ function AuctionDetailPage({ token }: { token: string }) {
           )}
         </div>
         <article>
-          <h1>{product?.name || `Auction ${shortId(detail.auction_id)}`}</h1>
+          <h1>{product?.name || detail.product_name || `Auction ${shortId(detail.auction_id)}`}</h1>
           {product?.artist_id && (
             <Link className="artisan-inline-link" to={`/artisans/${product.artist_id}`}>
               By {getProductArtistName(product)}
             </Link>
           )}
+          {!product?.artist_id && detail.seller_name && <p className="muted">By {detail.seller_name}</p>}
           <p className="muted">{detail.status}</p>
           
           <div className="bid-panel top-gap">
@@ -1681,19 +1738,15 @@ function AuctionDetailPage({ token }: { token: string }) {
             {detail.highest_bidder_id && (
               <div style={{ marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid #e0e0e0" }}>
                 {isYouWinning ? (
-                  <p style={{ color: "#2ecc71", fontWeight: "bold" }}>🏆 Your bid is winning!</p>
+                  <p style={{ color: "#2ecc71", fontWeight: "bold" }}>Your bid is winning.</p>
                 ) : (
-                  <p className="muted">Leading: {shortId(detail.highest_bidder_id)}</p>
+                  <p className="muted">Leading: {detail.highest_bidder_name || shortId(detail.highest_bidder_id)}</p>
                 )}
               </div>
             )}
           </div>
 
           <form className="form-stack top-gap" onSubmit={placeBid}>
-            <label>
-              Your Name
-              <input value={bidderName} onChange={(event) => setBidderName(event.target.value)} placeholder="Enter your name" />
-            </label>
             <label>
               Bid Amount (minimum: {CURRENCY_LABEL} {formatMoney(detail.minimum_next_bid)})
               <input
@@ -1707,7 +1760,7 @@ function AuctionDetailPage({ token }: { token: string }) {
                 required
               />
             </label>
-            {bidError && <p style={{ color: "#e74c3c", fontSize: "0.9rem" }}>⚠️ {bidError}</p>}
+            {bidError && <p style={{ color: "#e74c3c", fontSize: "0.9rem" }}>{bidError}</p>}
             <button type="submit" className="solid-btn" disabled={!isValidBid || showBidConfirmation}>
               {showBidConfirmation ? "Confirming..." : "Place Bid"}
             </button>
@@ -1756,7 +1809,7 @@ function AuctionDetailPage({ token }: { token: string }) {
       <section className="top-gap">
         <div className="section-head">
           <h2>Bid History</h2>
-          <span className="muted">{detail.recent_bids.length} bids</span>
+          <span className="muted">{detail.recent_bids.length} bids | {liveStatus}</span>
         </div>
         <ul className="history-list">
           {detail.recent_bids.map((bid) => {
@@ -1764,9 +1817,9 @@ function AuctionDetailPage({ token }: { token: string }) {
             return (
               <li key={bid.id} style={{ opacity: bid.bidder_id === detail.highest_bidder_id ? 1 : 0.7 }}>
                 <div>
-                  <strong>{isYourBid ? "You" : shortId(bid.bidder_id)}</strong>
+                  <strong>{isYourBid ? "You" : bid.bidder_name || shortId(bid.bidder_id)}</strong>
                   {bid.bidder_id === detail.highest_bidder_id && (
-                    <span style={{ marginLeft: "0.5rem", color: "#2ecc71" }}>🏆 Winning</span>
+                    <span style={{ marginLeft: "0.5rem", color: "#2ecc71" }}>Winning</span>
                   )}
                   <p className="muted">{new Date(bid.created_at).toLocaleString()}</p>
                 </div>

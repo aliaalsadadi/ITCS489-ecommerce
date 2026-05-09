@@ -7,6 +7,7 @@ from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
 from sqlalchemy import Select, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_current_profile, require_roles
 from app.api.v1.admin import _log_action
@@ -32,6 +33,12 @@ router = APIRouter(prefix="/auctions", tags=["auctions"])
 
 def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _profile_label(profile: Profile | None) -> str | None:
+    if profile is None:
+        return None
+    return profile.shop_name or profile.full_name or profile.email
 
 
 async def _resolve_ws_profile(token: str) -> Profile:
@@ -127,7 +134,11 @@ async def list_auctions(
 ) -> AuctionListResponse:
     now = _utc_now()
 
-    stmt: Select[tuple[Auction]] = select(Auction)
+    stmt: Select[tuple[Auction]] = select(Auction).options(
+        selectinload(Auction.product),
+        selectinload(Auction.seller),
+        selectinload(Auction.highest_bidder),
+    )
     count_stmt = select(func.count()).select_from(Auction)
 
     if view == "active":
@@ -152,8 +163,29 @@ async def list_auctions(
     stmt = stmt.order_by(Auction.created_at.desc()).offset(offset).limit(limit)
     items = list((await db.scalars(stmt)).all())
     total = (await db.execute(count_stmt)).scalar_one()
+    payload_items = [
+        AuctionStatusResponse(
+            id=auction.id,
+            product_id=auction.product_id,
+            product_name=auction.product.name if auction.product is not None else None,
+            product_image_url=auction.product.image_url if auction.product is not None else None,
+            seller_id=auction.seller_id,
+            seller_name=_profile_label(auction.seller),
+            highest_bidder_id=auction.highest_bidder_id,
+            highest_bidder_name=_profile_label(auction.highest_bidder),
+            status=auction.status,
+            starting_price=auction.starting_price,
+            min_increment=auction.min_increment,
+            current_highest_bid=auction.current_highest_bid,
+            start_time=auction.start_time,
+            end_time=auction.end_time,
+            created_at=auction.created_at,
+            updated_at=auction.updated_at,
+        )
+        for auction in items
+    ]
 
-    return AuctionListResponse(items=items, total=total, limit=limit, offset=offset)
+    return AuctionListResponse(items=payload_items, total=total, limit=limit, offset=offset)
 
 
 @router.get("/{auction_id}", response_model=AuctionDetailResponse)
@@ -171,13 +203,29 @@ async def get_auction(
         auction_id=auction.id,
         status=auction.status,
         product_id=auction.product_id,
+        product_name=auction.product.name if auction.product is not None else None,
+        product_image_url=auction.product.image_url if auction.product is not None else None,
         seller_id=auction.seller_id,
+        seller_name=_profile_label(auction.seller),
         highest_bidder_id=auction.highest_bidder_id,
+        highest_bidder_name=_profile_label(auction.highest_bidder),
         current_highest_bid=auction.current_highest_bid,
         min_increment=auction.min_increment,
         start_time=auction.start_time,
         end_time=auction.end_time,
-        recent_bids=bids,
+        recent_bids=[
+            {
+                "id": bid.id,
+                "auction_id": bid.auction_id,
+                "bidder_id": bid.bidder_id,
+                "bidder_name": _profile_label(bid.bidder),
+                "bid_amount": bid.bid_amount,
+                "status": bid.status,
+                "created_at": bid.created_at,
+                "updated_at": bid.updated_at,
+            }
+            for bid in bids
+        ],
         minimum_next_bid=minimum_next_bid(auction),
     )
 

@@ -12,10 +12,22 @@ from sqlalchemy import delete, select
 
 import app.models  # noqa: F401
 from app.core.config import get_settings
-from app.core.constants import AdminTargetType, OrderAction, OrderStatus, PaymentAction, ProductAction
+from app.core.constants import (
+    AdminTargetType,
+    AuctionAction,
+    AuctionStatus,
+    BidAction,
+    BidStatus,
+    OrderAction,
+    OrderStatus,
+    PaymentAction,
+    ProductAction,
+)
 from app.db.base import Base
 from app.db.session import AsyncSessionLocal, engine
 from app.models.admin_action_log import AdminActionLog
+from app.models.auction import Auction
+from app.models.bid import Bid
 from app.models.cart import Cart
 from app.models.order import Order, OrderItem
 from app.models.product import Product
@@ -379,6 +391,10 @@ async def _reset_seed_owned_rows(artisan_ids: list[uuid.UUID], customer_ids: lis
         await session.execute(
             delete(AdminActionLog).where(AdminActionLog.details["seed_source"].astext == MASS_SEED_SOURCE)
         )
+        if artisan_ids:
+            seed_auction_ids = select(Auction.id).where(Auction.seller_id.in_(artisan_ids))
+            await session.execute(delete(Bid).where(Bid.auction_id.in_(seed_auction_ids)))
+            await session.execute(delete(Auction).where(Auction.seller_id.in_(artisan_ids)))
         if customer_ids:
             await session.execute(delete(Cart).where(Cart.customer_id.in_(customer_ids)))
             await session.execute(delete(Order).where(Order.customer_id.in_(customer_ids)))
@@ -546,6 +562,146 @@ async def _seed_orders(customers: list[SeedUser], user_ids: dict[str, uuid.UUID]
     return orders_created
 
 
+async def _seed_auctions(
+    customers: list[SeedUser],
+    user_ids: dict[str, uuid.UUID],
+    products: list[Product],
+    admin_id: uuid.UUID,
+) -> tuple[int, int, int]:
+    now = datetime.now(timezone.utc)
+    customer_ids = [user_ids[customer.email] for customer in customers]
+    auctions_created = 0
+    bids_created = 0
+    audit_logs_created = 0
+
+    async with AsyncSessionLocal() as session:
+        for index, product in enumerate(products[:36]):
+            starting_price = _money(max(5, float(product.price) * RNG.uniform(0.45, 0.75)))
+            min_increment = _money(RNG.choice((1, 2, 2.5, 5, 7.5)))
+
+            if index < 12:
+                status_value = AuctionStatus.ACTIVE.value
+                start_time = now - timedelta(hours=RNG.randint(2, 30), minutes=RNG.randint(0, 45))
+                end_time = now + timedelta(hours=RNG.randint(4, 72), minutes=RNG.randint(0, 45))
+                bid_count = RNG.randint(1, 5)
+            elif index < 20:
+                status_value = AuctionStatus.SCHEDULED.value
+                start_time = now + timedelta(hours=RNG.randint(4, 96), minutes=RNG.randint(0, 45))
+                end_time = start_time + timedelta(hours=RNG.randint(12, 96))
+                bid_count = 0
+            else:
+                status_value = AuctionStatus.CLOSED.value
+                start_time = now - timedelta(days=RNG.randint(8, 60), hours=RNG.randint(0, 12))
+                end_time = start_time + timedelta(hours=RNG.randint(12, 96))
+                bid_count = RNG.randint(3, 7)
+
+            auction = Auction(
+                product_id=product.id,
+                seller_id=product.artist_id,
+                status=status_value,
+                starting_price=starting_price,
+                min_increment=min_increment,
+                current_highest_bid=starting_price,
+                start_time=start_time,
+                end_time=end_time,
+                created_at=start_time - timedelta(minutes=RNG.randint(10, 180)),
+                updated_at=end_time if status_value == AuctionStatus.CLOSED.value else now,
+            )
+            session.add(auction)
+            await session.flush()
+
+            session.add(
+                AdminActionLog(
+                    admin_id=admin_id,
+                    action=AuctionAction.CREATED.value,
+                    target_type=AdminTargetType.AUCTION.value,
+                    target_id=str(auction.id),
+                    details={
+                        "seed_source": MASS_SEED_SOURCE,
+                        "product_id": str(product.id),
+                        "product_name": product.name,
+                        "seller_id": str(product.artist_id),
+                        "starting_price": str(starting_price),
+                        "min_increment": str(min_increment),
+                        "status": status_value,
+                    },
+                    created_at=auction.created_at,
+                )
+            )
+            audit_logs_created += 1
+
+            bid_amount = starting_price
+            bidder_pool = [customer_id for customer_id in customer_ids if customer_id != product.artist_id]
+            selected_bidders = RNG.sample(bidder_pool, k=min(bid_count, len(bidder_pool)))
+            for bid_index, bidder_id in enumerate(selected_bidders):
+                bid_amount += min_increment + _money(RNG.choice((0, 0.5, 1, 2)))
+                if status_value == AuctionStatus.CLOSED.value:
+                    bid_status = BidStatus.WON.value if bid_index == bid_count - 1 else BidStatus.OUTBID.value
+                    bid_time_window_end = end_time - timedelta(minutes=5)
+                else:
+                    bid_status = BidStatus.ACTIVE.value if bid_index == bid_count - 1 else BidStatus.OUTBID.value
+                    bid_time_window_end = now - timedelta(minutes=2)
+
+                created_at = start_time + ((bid_time_window_end - start_time) * ((bid_index + 1) / (bid_count + 1)))
+                bid = Bid(
+                    auction_id=auction.id,
+                    bidder_id=bidder_id,
+                    bid_amount=bid_amount,
+                    status=bid_status,
+                    created_at=created_at,
+                    updated_at=created_at,
+                )
+                session.add(bid)
+                bids_created += 1
+
+                session.add(
+                    AdminActionLog(
+                        admin_id=None,
+                        action=BidAction.PLACED.value,
+                        target_type=AdminTargetType.AUCTION.value,
+                        target_id=str(auction.id),
+                        details={
+                            "seed_source": MASS_SEED_SOURCE,
+                            "auction_id": str(auction.id),
+                            "bidder_id": str(bidder_id),
+                            "bid_amount": str(bid_amount),
+                        },
+                        created_at=created_at,
+                    )
+                )
+                audit_logs_created += 1
+
+            if selected_bidders:
+                auction.current_highest_bid = bid_amount
+                auction.highest_bidder_id = selected_bidders[-1]
+
+            if status_value == AuctionStatus.CLOSED.value:
+                session.add(
+                    AdminActionLog(
+                        admin_id=None,
+                        action=AuctionAction.CLOSED.value,
+                        target_type=AdminTargetType.AUCTION.value,
+                        target_id=str(auction.id),
+                        details={
+                            "seed_source": MASS_SEED_SOURCE,
+                            "auction_id": str(auction.id),
+                            "product_id": str(product.id),
+                            "winner_id": str(auction.highest_bidder_id) if auction.highest_bidder_id else None,
+                            "winning_bid_amount": str(auction.current_highest_bid),
+                            "closed_by": "mass_seed",
+                        },
+                        created_at=end_time,
+                    )
+                )
+                audit_logs_created += 1
+
+            auctions_created += 1
+
+        await session.commit()
+
+    return auctions_created, bids_created, audit_logs_created
+
+
 async def main() -> None:
     admin, artisans, customers = _build_users()
     all_users = [admin, *artisans, *customers]
@@ -562,6 +718,9 @@ async def main() -> None:
 
     products = await _seed_products(artisans, user_ids, user_ids[admin.email])
     orders_created = await _seed_orders(customers, user_ids, products)
+    auctions_created, bids_created, auction_audit_logs = await _seed_auctions(
+        customers, user_ids, products, user_ids[admin.email]
+    )
 
     print("Mass seed completed.")
     print(f"- admin: {admin.email}")
@@ -569,9 +728,11 @@ async def main() -> None:
     print(f"- customers: {len(customers)}")
     print(f"- products: {len(products)}")
     print(f"- orders: {orders_created}")
-    print(f"- admin_activity_logs: {len(products) + (orders_created * 2)}")
+    print(f"- auctions: {auctions_created}")
+    print(f"- bids: {bids_created}")
+    print(f"- admin_activity_logs: {len(products) + (orders_created * 2) + auction_audit_logs}")
     print(f"- demo_password: {SEED_PASSWORD}")
-    print("- rerun behavior: resets seed-owned carts, orders, products, and audit logs before recreating them")
+    print("- rerun behavior: resets seed-owned carts, orders, products, auctions, bids, and audit logs before recreating them")
 
 
 if __name__ == "__main__":

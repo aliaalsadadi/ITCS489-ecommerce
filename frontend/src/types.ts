@@ -94,8 +94,12 @@ export interface Order {
 export interface Auction {
   id: string;
   product_id: string;
+  product_name: string | null;
+  product_image_url: string | null;
   seller_id: string;
+  seller_name: string | null;
   highest_bidder_id: string | null;
+  highest_bidder_name: string | null;
   status: string;
   starting_price: string;
   min_increment: string;

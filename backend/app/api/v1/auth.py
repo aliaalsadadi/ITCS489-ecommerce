@@ -16,6 +16,7 @@ from app.schemas.auth import (
     RoleUpdateRequest,
 )
 from app.services.supabase_auth_service import supabase_user_email_exists
+from app.core.constants import UserRole
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 PROFILE_UPLOAD_DIR = Path(__file__).resolve().parents[3] / "uploads" / "profiles"
@@ -110,7 +111,17 @@ async def update_my_role(
     db: AsyncSession = Depends(get_db),
     current_profile: Profile = Depends(get_current_profile),
 ) -> Profile:
-    current_profile.role = payload.role.value
+    desired_role = payload.role
+    current_role = current_profile.role
+
+    if desired_role.value == current_role:
+        return current_profile
+
+    if current_role == UserRole.CUSTOMER.value and desired_role == UserRole.ARTISAN:
+        current_profile.role = desired_role.value
+    else:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
+
     await db.commit()
     await db.refresh(current_profile)
     return current_profile

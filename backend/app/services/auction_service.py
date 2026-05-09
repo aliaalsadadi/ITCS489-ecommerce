@@ -214,6 +214,7 @@ async def list_recent_bids(db: AsyncSession, auction_id: UUID, limit: int = 20) 
     stmt = (
         select(Bid)
         .where(Bid.auction_id == auction_id)
+        .options(selectinload(Bid.bidder))
         .order_by(Bid.created_at.desc())
         .limit(limit)
     )
@@ -224,6 +225,11 @@ async def get_auction_detail(db: AsyncSession, auction_id: UUID) -> Auction | No
     stmt = (
         select(Auction)
         .where(Auction.id == auction_id)
-        .options(selectinload(Auction.bids))
+        .options(
+            selectinload(Auction.bids),
+            selectinload(Auction.product),
+            selectinload(Auction.seller),
+            selectinload(Auction.highest_bidder),
+        )
     )
     return (await db.scalars(stmt)).first()

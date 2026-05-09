@@ -13,6 +13,7 @@ class BidResponse(BaseModel):
     id: UUID
     auction_id: UUID
     bidder_id: UUID
+    bidder_name: str | None = None
     bid_amount: Decimal
     status: str
     created_at: datetime
@@ -25,8 +26,12 @@ class AuctionDetailResponse(BaseModel):
     auction_id: UUID
     status: str
     product_id: UUID
+    product_name: str | None = None
+    product_image_url: str | None = None
     seller_id: UUID
+    seller_name: str | None = None
     highest_bidder_id: UUID | None
+    highest_bidder_name: str | None = None
     current_highest_bid: Decimal
     min_increment: Decimal
     start_time: datetime
